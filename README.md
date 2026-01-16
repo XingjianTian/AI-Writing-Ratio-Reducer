@@ -1,4 +1,4 @@
-# AI Writing Reduction Tool
+# AI Writing Ratio Reducer
 
 A 3-stage tool to reduce AI writing detection through LLM rewriting and back-translation.
 
