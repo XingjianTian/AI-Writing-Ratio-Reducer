@@ -13,3 +13,5 @@ test-server.ts
 
 # OS files
 .DS_Store
+.vercel
+.env*.local
