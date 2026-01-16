@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Writing Reduction Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading { opacity: 0.5; pointer-events: none; }
+        .counter { font-size: 0.75rem; margin-top: 0.25rem; }
+        .counter-limit { color: #6b7280; }
+        .counter-warn { color: #ef4444; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+    <div class="max-w-[100%] mx-auto">
+        <h1 class="text-2xl font-bold text-center mb-6 text-blue-800">AI Writing Reduction Tool (Stream Mode)</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- Stage 1: Input -->
+            <div class="bg-white p-4 rounded-lg shadow flex flex-col">
+                <h2 class="text-lg font-semibold mb-2 text-gray-700">1. Original</h2>
+                <textarea id="box1" class="w-full flex-grow p-3 border rounded focus:ring-2 focus:ring-blue-500 min-h-[500px]" placeholder="Original AI text..."></textarea>
+                <div class="counter" id="counter1">Words: 0 / 2000</div>
+                <div class="mt-3 flex gap-2">
+                    <button id="btn-rewrite" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm flex-grow">Rewrite (Gemini Stream)</button>
+                    <button onclick="copy('box1')" class="bg-gray-200 px-3 py-2 rounded text-sm">Copy</button>
+                </div>
+            </div>
+
+            <!-- Stage 2: Rewritten -->
+            <div class="bg-white p-4 rounded-lg shadow flex flex-col">
+                <h2 class="text-lg font-semibold mb-2 text-gray-700">2. AI Draft</h2>
+                <textarea id="box2" class="w-full flex-grow p-3 border rounded focus:ring-2 focus:ring-green-500 min-h-[500px]" placeholder="Gemini output..."></textarea>
+                <div class="counter" id="counter2">Words: 0 / 2000</div>
+                <div class="mt-3 flex gap-2">
+                    <button id="btn-to-zh" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-sm flex-grow">To Chinese</button>
+                    <button onclick="copy('box2')" class="bg-gray-200 px-3 py-2 rounded text-sm">Copy</button>
+                </div>
+            </div>
+
+            <!-- Stage 3: Chinese -->
+            <div class="bg-white p-4 rounded-lg shadow flex flex-col">
+                <h2 class="text-lg font-semibold mb-2 text-gray-700">3. Chinese RT</h2>
+                <textarea id="box3" class="w-full flex-grow p-3 border rounded focus:ring-2 focus:ring-yellow-500 min-h-[500px]" placeholder="Chinese translation..."></textarea>
+                <div class="counter" id="counter3">Chars: 0 / 5000</div>
+                <div class="mt-3 flex gap-2">
+                    <button id="btn-to-en" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded text-sm flex-grow">Back to English</button>
+                    <button onclick="copy('box3')" class="bg-gray-200 px-3 py-2 rounded text-sm">Copy</button>
+                </div>
+            </div>
+
+            <!-- Stage 4: Final -->
+            <div class="bg-white p-4 rounded-lg shadow flex flex-col">
+                <h2 class="text-lg font-semibold mb-2 text-gray-700">4. Final Humanized</h2>
+                <textarea id="box4" class="w-full flex-grow p-3 border rounded focus:ring-2 focus:ring-purple-500 min-h-[500px]" placeholder="Final back-translation..."></textarea>
+                <div class="counter" id="counter4">Words: 0 / 2000</div>
+                <div class="mt-3">
+                    <button onclick="copy('box4')" class="w-full bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded text-sm">Copy Final</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const LIMITS = {
+            box1: { type: 'words', max: 2000 },
+            box2: { type: 'words', max: 2000 },
+            box3: { type: 'chars', max: 5000 },
+            box4: { type: 'words', max: 2000 }
+        };
+
+        function updateCounters() {
+            for (let i = 1; i <= 4; i++) {
+                const id = 'box' + i;
+                const textarea = document.getElementById(id);
+                const counter = document.getElementById('counter' + i);
+                const text = textarea.value.trim();
+                const limit = LIMITS[id];
+                let count = 0;
+                if (limit.type === 'words') {
+                    count = text === "" ? 0 : text.split(/\s+/).length;
+                    counter.innerText = `Words: ${count} / ${limit.max}`;
+                } else {
+                    count = text.length;
+                    counter.innerText = `Chars: ${count} / ${limit.max}`;
+                }
+                counter.className = count > limit.max ? 'counter counter-warn' : 'counter counter-limit';
+            }
+        }
+
+        ['box1', 'box2', 'box3', 'box4'].forEach(id => {
+            document.getElementById(id).addEventListener('input', updateCounters);
+        });
+
+        // Gemini Stream Implementation
+        async function rewriteStream() {
+            const btn = document.getElementById('btn-rewrite');
+            const box1 = document.getElementById('box1');
+            const box2 = document.getElementById('box2');
+            
+            if (!box1.value.trim()) return alert('Please enter text');
+
+            box2.value = ''; // Clear previous
+            btn.innerText = 'Writing...';
+            btn.classList.add('loading');
+
+            const eventSource = new EventSource(`/api/rewrite-stream?text=${encodeURIComponent(box1.value)}`);
+
+            eventSource.onmessage = (event) => {
+                if (event.data === '[DONE]') {
+                    eventSource.close();
+                    btn.innerText = 'Rewrite (Gemini Stream)';
+                    btn.classList.remove('loading');
+                    updateCounters();
+                    return;
+                }
+                const data = JSON.parse(event.data);
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    eventSource.close();
+                    btn.innerText = 'Rewrite (Gemini Stream)';
+                    btn.classList.remove('loading');
+                } else {
+                    box2.value += data.text;
+                    updateCounters();
+                }
+            };
+
+            eventSource.onerror = (err) => {
+                console.error("SSE Error:", err);
+                eventSource.close();
+                btn.innerText = 'Rewrite (Gemini Stream)';
+                btn.classList.remove('loading');
+            };
+        }
+
+        async function apiCall(endpoint, data, targetBox, button) {
+            const originalText = button.innerText;
+            try {
+                button.innerText = '...';
+                button.classList.add('loading');
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (result.error) throw new Error(result.error);
+                targetBox.value = result.result;
+                updateCounters();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                button.innerText = originalText;
+                button.classList.remove('loading');
+            }
+        }
+
+        document.getElementById('btn-rewrite').addEventListener('click', rewriteStream);
+
+        document.getElementById('btn-to-zh').addEventListener('click', function() {
+            apiCall('/api/translate-zh', { text: document.getElementById('box2').value }, document.getElementById('box3'), this);
+        });
+
+        document.getElementById('btn-to-en').addEventListener('click', function() {
+            apiCall('/api/translate-en', { text: document.getElementById('box3').value }, document.getElementById('box4'), this);
+        });
+
+        function copy(id) {
+            const textarea = document.getElementById(id);
+            textarea.select();
+            document.execCommand('copy');
+        }
+
+        updateCounters();
+    </script>
+</body>
+</html>
