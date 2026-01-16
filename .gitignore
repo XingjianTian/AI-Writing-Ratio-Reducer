@@ -1,5 +1,15 @@
+# Dependencies
 node_modules/
+bun.lockb
+
+# API Keys & Secrets
 .env
 BaiduTranslationApiKey.txt
 GeminiPrompt.txt
+
+# Local debug files
+test-server.ts
 .sisyphus/
+
+# OS files
+.DS_Store
