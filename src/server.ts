@@ -3,46 +3,28 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 
 dotenv.config();
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-const readConfigFile = (filename: string): string => {
-  try {
-    const filePath = path.join(process.cwd(), filename);
-    if (fs.existsSync(filePath)) {
-      return fs.readFileSync(filePath, 'utf-8').trim();
-    }
-  } catch (error) {
-    console.error(`Error reading ${filename}:`, error);
-  }
-  return '';
-};
-
+// Gemini API Setup
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || '');
 const model = genAI.getGenerativeModel({ model: "gemini-3-pro-preview" });
 
 const baiduTranslate = async (query: string, from: string, to: string) => {
-  const baiduConfig = readConfigFile('BaiduTranslationApiKey.txt');
-  const configLines = baiduConfig.split('\n');
-  let appId = '';
-  let secretKey = '';
-  configLines.forEach(line => {
-    if (line.startsWith('APP_ID=')) appId = line.split('=')[1] || '';
-    if (line.startsWith('SECRET_KEY=')) secretKey = line.split('=')[1] || '';
-  });
+  const appId = process.env.BAIDU_APP_ID;
+  const secretKey = process.env.BAIDU_SECRET_KEY;
 
   if (!appId || !secretKey) {
-    throw new Error('Baidu API credentials missing or malformed');
+    throw new Error('Baidu API credentials missing in environment variables');
   }
 
   const salt = Date.now().toString();
@@ -67,8 +49,8 @@ app.get('/api/rewrite-stream', async (req, res) => {
   const { text } = req.query;
   if (!text) return res.status(400).send('No text provided');
 
-  // Try reading from .env first, fallback to file
-  const promptBase = process.env.GEMINI_PROMPT_BASE || readConfigFile('GeminiPrompt.txt');
+  // Use environment variable for prompt base
+  const promptBase = process.env.GEMINI_PROMPT_BASE || '';
   const fullPrompt = promptBase + text;
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -97,6 +79,7 @@ app.post('/api/translate-zh', async (req, res) => {
     const result = await baiduTranslate(text, 'en', 'zh');
     res.json({ result });
   } catch (error: any) {
+    console.error('Translate-zh error:', error);
     res.status(500).json({ error: error.message || 'Error with Baidu Translation' });
   }
 });
@@ -108,10 +91,11 @@ app.post('/api/translate-en', async (req, res) => {
     const result = await baiduTranslate(text, 'zh', 'en');
     res.json({ result });
   } catch (error: any) {
+    console.error('Translate-en error:', error);
     res.status(500).json({ error: error.message || 'Error with Baidu Translation' });
   }
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`Server running at http://localhost:${port}`);
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
