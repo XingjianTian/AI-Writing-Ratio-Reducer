@@ -1,5 +1,7 @@
 # AI Writing Ratio Reducer
 
+**English (primary)** · [简体中文](README.zh-CN.md)
+
 A specialized tool to reduce AI writing detection scores through advanced LLM rewriting and back-translation logic. Optimized for high-speed streaming and human-like output.
 
 ## Key Features
